@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Backend não interativo para evitar travamentos no servidor
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Processador Acústico - 1/3 Oitava", layout="wide")
@@ -8,15 +10,15 @@ st.set_page_config(page_title="Processador Acústico - 1/3 Oitava", layout="wide
 st.title("📊 Processador de Espectro Acústico (1/3 de Oitava)")
 st.write("Faça o upload do arquivo CSV do seu sonômetro para calcular os níveis $LZ_{eq}$ e exportar o relatório em TXT.")
 
-# Botão de upload do arquivo CSV
 uploaded_file = st.file_uploader("Arraste ou selecione o arquivo CSV do ensaio", type=["csv"])
 
 if uploaded_file is not None:
-    # Leitura flexível do CSV (tratando delimitadores e codificação)
     try:
-        df = pd.read_csv(uploaded_file, sep=';', encoding='utf-8')
-    except:
+        # Leitura otimizada do CSV
+        df = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8')
+    except Exception:
         try:
+            uploaded_file.seek(0)
             df = pd.read_csv(uploaded_file, sep=';', encoding='latin1')
         except Exception as e:
             st.error(f"Erro ao ler o arquivo CSV: {e}")
@@ -25,7 +27,6 @@ if uploaded_file is not None:
     if df is not None:
         st.success("✅ Arquivo processado com sucesso!")
         
-        # Lista de frequências em 1/3 de oitava
         freq_cols = [
             '50 Hz', '63 Hz', '80 Hz', '100 Hz', '125 Hz', '160 Hz', 
             '200 Hz', '250 Hz', '315 Hz', '400 Hz', '500 Hz', '630 Hz', 
@@ -33,16 +34,12 @@ if uploaded_file is not None:
             '3,15 kHz', '4 kHz', '5 kHz', '6,3 kHz', '8 kHz', '10 kHz'
         ]
         
-        # Filtrar colunas presentes no CSV carregado
         available_cols = [col for col in freq_cols if col in df.columns]
         
         if available_cols:
             results = {}
             for col in available_cols:
-                # Converter texto com vírgula para número flutuante
                 vals = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-                
-                # Média energética (apenas valores > 0)
                 valid_vals = vals[vals > 0]
                 if len(valid_vals) > 0:
                     mean_linear = valid_vals.mean()
@@ -53,11 +50,9 @@ if uploaded_file is not None:
                 
             res_df = pd.DataFrame(list(results.items()), columns=['Frequência', 'LZeq (dB)'])
             
-            # 1. Exibição da Tabela de Resultados
             st.subheader("📋 Tabela de Níveis $LZ_{eq}$ por Banda")
             st.dataframe(res_df, use_container_width=True)
             
-            # 2. Exibição do Gráfico de Espectro
             st.subheader("📈 Gráfico de Espectro de Frequência")
             fig, ax = plt.subplots(figsize=(12, 5))
             ax.bar(res_df['Frequência'], res_df['LZeq (dB)'], color='#1f77b4', width=0.6)
@@ -67,8 +62,8 @@ if uploaded_file is not None:
             plt.xticks(rotation=45, ha='right')
             ax.grid(axis='y', linestyle='--', alpha=0.7)
             st.pyplot(fig)
+            plt.close(fig)  # Fecha a figura para liberar memória
             
-            # 3. Gerar o arquivo TXT para download
             txt_content = "Frequencia;LZeq (dB)\n"
             for idx, row in res_df.iterrows():
                 txt_content += f"{row['Frequência']};{row['LZeq (dB)']}\n"
