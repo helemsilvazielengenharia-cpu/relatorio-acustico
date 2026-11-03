@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # Backend não interativo para evitar travamentos no servidor
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Processador Acústico - 1/3 Oitava", layout="wide")
@@ -14,8 +14,9 @@ uploaded_file = st.file_uploader("Arraste ou selecione o arquivo CSV do ensaio",
 
 if uploaded_file is not None:
     try:
-        # Leitura otimizada do CSV
-        df = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8')
+        # Lê o CSV forçando o separador por ponto e vírgula
+        uploaded_file.seek(0)
+        df = pd.read_csv(uploaded_file, sep=';', encoding='utf-8')
     except Exception:
         try:
             uploaded_file.seek(0)
@@ -25,7 +26,10 @@ if uploaded_file is not None:
             df = None
 
     if df is not None:
-        st.success("✅ Arquivo processado com sucesso!")
+        # Limpa espaços em branco nos nomes das colunas
+        df.columns = df.columns.str.strip()
+        
+        st.success(f"✅ Arquivo processado com sucesso! Total de linhas: {len(df)}")
         
         freq_cols = [
             '50 Hz', '63 Hz', '80 Hz', '100 Hz', '125 Hz', '160 Hz', 
@@ -39,6 +43,7 @@ if uploaded_file is not None:
         if available_cols:
             results = {}
             for col in available_cols:
+                # Converte os valores substituindo vírgula por ponto
                 vals = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
                 valid_vals = vals[vals > 0]
                 if len(valid_vals) > 0:
@@ -62,7 +67,7 @@ if uploaded_file is not None:
             plt.xticks(rotation=45, ha='right')
             ax.grid(axis='y', linestyle='--', alpha=0.7)
             st.pyplot(fig)
-            plt.close(fig)  # Fecha a figura para liberar memória
+            plt.close(fig)
             
             txt_content = "Frequencia;LZeq (dB)\n"
             for idx, row in res_df.iterrows():
@@ -75,6 +80,8 @@ if uploaded_file is not None:
                 mime="text/plain"
             )
         else:
-            st.error("As colunas de frequência em 1/3 de oitava não foram encontradas no arquivo CSV.")
+            # Mostra as colunas encontradas para ajudar a diagnosticar caso falte alguma
+            st.error("As colunas de frequência em 1/3 de oitava não foram encontradas.")
+            st.write("Colunas detetadas no seu arquivo:", list(df.columns))
 else:
     st.info("💡 Por favor, faça o upload de um arquivo CSV para visualizar a análise e baixar o relatório TXT.")
